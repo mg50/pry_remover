@@ -1,0 +1,13 @@
+name:                pry_remover
+version:             0.1.0.0
+license:             MIT
+license-file:        License
+author:              Mark Grant
+maintainer:          mark.alan.grant@gmail.com
+build-type:          Simple
+cabal-version:       >=1.8
+
+executable pry_remover
+  ghc-options:         -threaded -W -fno-warn-unused-binds
+  main-is:             Main.hs
+  hs-source-dirs:      src
