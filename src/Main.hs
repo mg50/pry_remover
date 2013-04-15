@@ -1,21 +1,41 @@
 module Main where
 
-import System.IO (Handle)
+import System.IO
+import System.Process
 import Control.Monad
+import Parse (PryInstance(..), getPryInstances)
 
-removeIndex :: [a] -> Int -> [a]
-removeIndex as idx = go as 0
-  where go [] i = []
-        go (a:as) i = if i == idx
-                         then go as $! i + 1
-                         else a:(go as $! i + 1)
+-- ack is broken and tries to read from stdin when using readCommand, so set up everything manually
+search :: IO [PryInstance]
+search = do print "starting"
+            let cmd = ShellCommand "ack \"binding.pry|binding.remote_pry\""
+            let process = CreateProcess cmd Nothing Nothing Inherit CreatePipe Inherit True False
+            (_, (Just hdl), _, pid) <- createProcess process
+            waitForProcess pid
+            ackOutput <- hGetContents hdl
+            print ackOutput
+            return $ getPryInstances ackOutput
 
+promptDelete :: [String] -> Int -> IO Bool
+promptDelete lines lineNum = do putStr $ (show lineNum) ++ ": "
+                                putStrLn $ lines !! lineNum
+                                putStrLn "Delete? y/n"
+                                resp <- getLine
+                                putStrLn "\n"
+                                return $ resp == "y"
 
-removeLine :: Handle -> Int -> IO [String]
-removeLine hdl lineNum = do lines <- liftM lines $ StrictIO.hGetContents hdl
-                            return $ removeIndex lines lineNum
+removeLines :: Handle -> [String] -> [Int] -> IO ()
+removeLines hdl lines deletions =
+  let remainingLines = [line | (line, idx) <- zip lines [0..], not (idx `elem` deletions)]
+  in hPutStr hdl (unlines remainingLines)
 
+removePryInstance :: PryInstance -> IO ()
+removePryInstance (PryInstance fileName lineNums) =
+  withFile fileName ReadWriteMode $ \hdl ->
+    do fileLines <- liftM lines $ hGetContents hdl
+       putStrLn fileName
+       deletions <- filterM (promptDelete fileLines) lineNums
+       removeLines hdl fileLines deletions
 
-
--- main = do pryInstances <- search
---           forM pryInstances print
+main :: IO ()
+main = search >>= mapM_ removePryInstance
